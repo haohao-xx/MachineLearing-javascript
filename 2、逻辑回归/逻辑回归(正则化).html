@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>逻辑回归(正则化)</title>
+    <script src="../echarts.js"></script>
+    <style>
+    .canvas{
+        width: 600px;
+        height: 400px;
+        margin-left: 30px;
+        background-color: blanchedalmond;
+        display: inline-block;
+    }
+    #picture{
+        width: 100%;
+    }
+    </style>
+</head>
+<body>
+    <input type="file" onchange="upload(this)">
+    <button onclick="start()">生成</button>
+    <div id="picture">
+        <div class="canvas pic1"></div>
+        <div class="canvas pic2"></div>
+        <div class="canvas pic3"></div>
+        <div class="canvas pic4"></div>
+    </div>
+    <script id="worker">
+        var realdata;
+        var resdata;
+        var citas=new Array(28).fill(5);
+        var tmps=new Array(28).fill(0);
+        var alpha=2;
+        var lamd;
+        var coefficients_expo=[];
+        for(var i=0;i<7;i++)
+        {
+            for(var j=0;j<7-i;j++)
+            {
+                coefficients_expo.push([i,j]);
+            }
+        }
+
+        function hΘ(x1,x2)
+        {
+            var res=0;
+            for(var i=0;i<citas.length;i++)
+            {
+                res+=citas[i]*x1**coefficients_expo[i][0]*x2**coefficients_expo[i][1];
+            }
+            //console.log(res)
+            return 1/(1+Math.exp(-res));
+        }
+        function Derivative(j,expo)
+        {
+            var res=0;
+            for(var i=0;i<realdata.length;i++)
+            {
+                res+=(hΘ(realdata[i][0],realdata[i][1])-realdata[i][2])*(realdata[i][0]**expo[0]*realdata[i][1]**expo[1])
+            }
+            //console.log(res)
+            if(j==0)
+                return res/realdata.length;
+            else
+                return (res+lamd*citas[j])/realdata.length;
+        }
+
+        function calcita()
+        {
+            for(var i=0;i<300;i++)
+            {
+                for(let j=0;j<tmps.length;j++)
+                {
+                    tmps[j]=citas[j]-alpha*Derivative(j,coefficients_expo[j]);
+                }
+                for(let j=0;j<citas.length;j++)
+                {
+                    citas[j]=tmps[j];
+                }   
+            }
+        }
+
+        function init_Result(){
+            var res=[];
+            for(var i=-1;i<=1.5;i=i+0.02)
+            {
+                for(var j=-0.9;j<=1.2;j=j+0.02)
+                {
+                    if(hΘ(i,j).toFixed(1)>=0.5)
+                        res.push([i,j])
+                }
+            }
+            //console.log(res)
+            return res;
+        }
+
+
+        this.addEventListener('message',function(e){
+            if(e.data.length>10)
+                {
+                    realdata=e.data;
+                    return
+                }
+            //console.log(e.data)
+            lamd=e.data[0];
+            calcita();
+            res_data=init_Result();
+            //console.log(citas)
+            this.postMessage([res_data,e.data[1]+1])
+        },false)
+    </script>
+
+
+
+
+    <script> 
+        var blob = new Blob([document.querySelector('#worker').textContent]);
+        var url = window.URL.createObjectURL(blob);
+        var worker = new Worker(url);
+
+        var click=0;
+        var realdata=[];
+        //console.log(coefficients_expo)
+        //var citas=[0.7413289532015414, 0.6579187631635973, -0.6686076640480322, -0.18376953502168464, -0.730002366432634, -0.42905365891482034, -0.6877912484167404, 0.22488751366099402, -0.3840875930872174, -0.17646050741856284, -0.10151562393867136, -0.12856564984465446, -0.04633336110981506, -1.1752336331972257, -0.17358512988310443, -0.3292682529020995, -0.14265490083427884, -0.18056551758892989, -0.050283187436564354, -0.03920818912968837, -0.04902448338156301, -0.0002391578178414318, -0.9051717370151362, -0.11213844466135077, -0.165112638383775, -0.2325131283949361, -0.003565565419674986, -0.6753319860430806]
+        var res_data;
+        function upload(input){   
+            var file=input.files[0];
+            if(!file) return;
+            realdata.length=0;
+            filename=file.name.split(".")[0];
+            //console.log(filename)
+            var reader=new FileReader();
+            reader.onload=function(){
+                var str=JSON.stringify(this.result)
+                str=JSON.parse(str.replace(/\\n/g," ")).trim()
+                var rawdata=str.split(" ")
+                for(var i=0;i<rawdata.length;i++)
+                    realdata.push(rawdata[i].split(","))
+                //console.log(realdata)
+                //异步获取数据更新图表
+                var common_option={
+                legend:{
+                    type:'plain', 
+                    left:'60%',
+                    top:'20',
+                    data:[{
+                        name:'合格',
+                        icon:'circle'
+                    },
+                    {
+                        name:'不合格',
+                        icon:'diamond'
+                    }],
+                    
+                },
+                series:[
+                    {
+                        data:realdata.filter(item=>{
+                            return item[2]=='1'
+                        }),
+                        itemStyle:
+                        {
+                            color:'orange'
+                            /* color:function(e){
+                            //console.log(e)
+                            if(e.data[2]=='0')
+                                return 'black'
+                            else
+                                return 'orange'
+                            } */
+                        },
+                        symbol:'circle'
+                        /* symbol:function(e){
+                            //console.log(e)
+                            if(e[2]=='0')
+                                return 'diamond'
+                            else
+                                return 'circle'
+                        }, */
+                    },
+                    {
+                        data:realdata.filter(item=>{
+                            return item[2]=='0'
+                        }),
+                        itemStyle:{
+                            color:'black'
+                        },
+                        symbol:'diamond'
+                    }]
+                }
+                pic_result.forEach(item=>{
+                    item.setOption(common_option)
+                })
+
+                worker.postMessage(realdata)
+            }
+            reader.readAsText(file);
+            
+        }
+        var base_option={
+                title:{
+                    text:'训练数据',
+                    top:'10'
+                },
+                
+                xAxis:{
+                    scale:true,
+                    name:'测试一', 
+                    nameLocation:"center",
+                    nameGap:30
+                },
+                yAxis:{
+                    scale:true,
+                    name:'测试二',
+                    nameLocation:"center",
+                    nameGap:30
+                },
+                series:[
+                    {
+                        name:'合格',
+                        type:'scatter',
+                        data:[]
+                    },
+                    {
+                        name:'不合格',
+                        type:'scatter',
+                        data:[]
+                    },
+                    {
+                        type:'scatter',
+                        data:[]
+                    }
+                ]
+            }
+        var pic=[].slice.call(document.querySelectorAll(".canvas"))
+        var pic_result=new Array(4);
+        var λ=[0,1,100]
+        pic.forEach((item,index) => {
+            pic_result[index]=echarts.init(pic[index],'light')
+            if(index!=0)
+            pic_result[index].setOption(Object.assign(base_option,{
+                title:{text:'生成结果(λ='+λ[index-1]+')',top:10}
+            }))
+            else
+            pic_result[index].setOption(base_option)
+        });
+
+        function start(){
+            if(realdata.length==0) 
+            {
+                alert('请先添加数据')
+                return ;
+            }
+            else if(click==1)
+            {
+                alert('不要重复点击o')
+                return;
+            }
+            //calcita();
+            //console.log(citas)
+            click=1;
+            for(var i=0;i<3;i++)
+            {
+                 worker.postMessage([λ[i],i])
+                 pic_result[i+1].showLoading()
+            }
+            worker.onmessage=function(e){
+                res_data=e.data[0]
+                pic_result[e.data[1]].hideLoading()
+                pic_result[e.data[1]].setOption({series:[{},{},{data:res_data}]})
+            }
+        }
+
+
+    </script>
+</body>
+</html>

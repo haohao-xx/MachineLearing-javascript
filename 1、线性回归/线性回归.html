@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>线性回归</title>
+    <script src="../echarts.js"></script>
+    <style>
+        #picture{
+            display: flex;
+            width: 100%;
+            /* height: 500px; */
+            flex-direction: row;
+            margin-top: 20px;
+        }
+        .canvas{
+            width: 600px;
+            height: 400px;
+            margin-right: 20px;
+        }
+        #result h2{
+            display: inline-block;
+            width: 300px;
+        }
+        #result{
+          
+            display: flex;
+            flex-direction: row;
+            flex: 1;
+        }
+        #head{
+            width: 1400px;
+            display: flex;
+            flex-direction: row;
+        }
+        .header{
+            border-radius: 10px;
+            box-shadow: bisque;
+            background-color: rgb(236, 248, 239);
+            border: 1px solid rgb(238, 212, 212);
+            display: flex;
+            flex-direction: column;
+            width: 500px;
+            align-items: center;
+            margin-right: 50px;
+        }
+        .header .item{
+            margin-top: 10px;
+            width: 400px;
+            height: 50px;
+            display: flex;
+            flex-direction: row;
+            align-items: center;
+        }
+        .header .item p{
+            display: block;
+            width: 200px;
+            height: 30px;
+            font-size: 15px;
+            margin-right: 20px;
+            text-align: center;
+            padding-top: 5px;
+        }
+        .header input[type="text"],input[type="number"],input[type="file"]{
+            width: 300px;
+            height: 30px;
+            outline: none;
+        }
+        .header .item:nth-child(4){
+            display: flex;
+            justify-content: space-between;
+        }
+        .header .item:nth-child(4) input{
+            width: 100px;
+            height: 30px;
+            border-radius: 5px;
+            border:1px solid pink;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <div id="head">
+        <form class="header">
+            <div class="item">
+                <p>点击上传数据:</p> 
+                <input type="file" onchange="upload(this)" >
+            </div>
+            <div class="item">
+                <p>输入学习次数:</p>
+                <input type="text" id="input" autocomplete="off">
+            </div>
+            <div class="item">
+                <p>输入学习率(0-0.01]:</p>
+                <input type=text id="alpha" autocomplete="off" >
+            </div>
+            <div class="item">
+                <input type="reset" value="清空">
+                <input type="button" value="确定" onclick="start()">
+            </div>
+        </form>
+        <div id="result">
+            <h2>学习结果<span>(0次)</span> <br> Θ0:<br>Θ1:</h2>
+            <h2>城市预估值<span>(0次)</span><br> A市:<br>B市:</h2>
+        </div>
+    </div>
+
+    <div id="picture">
+        <div class="canvas pic1"></div>
+        <div class="canvas pic2"></div>
+    </div>
+    
+    
+    <script>
+
+
+        var realdata=[];   //储存输入的数据
+        //读入文件，初始化数据
+        function upload(input){    
+            var file=input.files[0];
+            filename=file.name.split(".")[0];
+            //console.log(filename)
+            var reader=new FileReader();
+            reader.onload=function(){
+                var str=JSON.stringify(this.result)
+                str=JSON.parse(str.replace(/\\n/g," ")).trim()
+                rawdata=str.split(" ")
+                for(var i=0;i<rawdata.length;i++)
+                    realdata.push(rawdata[i].split(","))
+                //console.log(realdata)
+            }
+            reader.readAsText(file);
+            file_flag=1;
+        }
+        //初始化两个图表
+        var myChart1 = echarts.init(document.getElementsByClassName("pic1")[0],'dark');  //第二个参数设置模式  夜间/白天
+                myChart1.setOption({
+                    title:{
+                        text:"JΘ变化曲线/0次"
+                    },
+                    dataZoom: [
+                        {   // 这个dataZoom组件，默认控制x轴。
+                            type: 'slider', // 这个 dataZoom 组件是 slider 型 dataZoom 组件
+                            start: 10,      // 左边在 10% 的位置。
+                            end: 60 ,   // 右边在 60% 的位置。
+                            bottom:0     
+                        },
+                        {   // 这个dataZoom组件，也控制x轴。
+                            type: 'inside', // 这个 dataZoom 组件是 inside 型 dataZoom 组件
+                            start: 20,      // 左边在 10% 的位置。
+                            end: 60 ,        // 右边在 60% 的位置。
+                            
+                        }
+                    ],
+                    xAxis:{
+                        scale:true,
+                        name:"次数",
+                        nameLocation:"end"
+                    },
+                    yAxis:{
+                        scale:true,
+                        name:"JΘ值",
+                        nameLocation:"end"
+                    },
+                    series:[
+                        {
+                            type: 'scatter',    
+                            data: [], 
+                        }
+                    ]
+            }) 
+        var myChart2 = echarts.init(document.getElementsByClassName("pic2")[0],'dark'); 
+                myChart2.setOption({
+                    title:{
+                        text:"实际值与预测值变化图像/0次"
+                    },
+                    dataZoom: [
+                        {   // 这个dataZoom组件，默认控制x轴。
+                            type: 'slider', // 这个 dataZoom 组件是 slider 型 dataZoom 组件
+                            start: 10,      // 左边在 10% 的位置。
+                            end: 60,        // 右边在 60% 的位置。
+                            bottom:0       
+                        },
+                        {   // 这个dataZoom组件，也控制x轴。
+                            type: 'inside', // 这个 dataZoom 组件是 inside 型 dataZoom 组件
+                            start: 10,      // 左边在 10% 的位置。
+                            end: 60         // 右边在 60% 的位置。
+                        }
+                    ],
+                    xAxis:{
+                        scale:true,
+                        name:"人口数(万人)",
+                        nameLocation:"center"
+                    },
+                    yAxis:{
+                        scale:true,
+                        name:"利润(万元)",
+                        nameLocation:"end"
+                    },
+                    series:[
+                        {
+                            type: 'scatter',    
+                            data: [], 
+                        },
+                        {
+                            type: 'scatter',    
+                            data: [], 
+                        }
+                    ]
+            }) 
+        
+        
+        //开始计算
+        function start(){
+            if(file_flag==0) 
+            {
+                alert("请先添加数据");
+                return
+            }
+            if(input_flag||alpha_flag) {
+                alert("输入数据无效");
+                return
+            }
+            var alpha=document.getElementById("alpha").value.trim();  //学习率
+            var nums=document.getElementById("input").value.trim();  //迭代次数
+            //console.log(alpha)
+            var cita_rate=[];     //储存JΘ的变化情况
+            var Cita0=0,Cita1=0;   //初始化参数为0
+            var temp0,temp1;
+            function sum0(index){     //对偏导数求和
+                var res=0;  
+                for(var i=0;i<realdata.length;i++)
+                {
+                    res+=(Cita0+Cita1*realdata[i][0]-realdata[i][1]);
+                }
+                return res/realdata.length
+            }
+
+            function sum1(index){
+                var res=0;  
+                for(var i=0;i<realdata.length;i++)
+                {
+                    res+=(Cita0+Cita1*realdata[i][0]-realdata[i][1])*realdata[i][0];
+                }
+                return res/realdata.length
+            }
+
+            function cal_jcita(){   //计算JΘ的值
+                var res=0;
+                for(var i=0;i<realdata.length;i++)
+                    res+=((Cita0+Cita1*realdata[i][0])-realdata[i][1])**2
+                return res/2/realdata.length;
+            }
+
+
+            for(var i=0;i<nums;i++)   //迭代计算
+            {
+                cita_rate.push(cal_jcita())
+                temp0=Cita0-alpha*sum0(i);
+                temp1=Cita1-alpha*sum1(i);
+                Cita0=temp0;
+                Cita1=temp1;
+            }
+
+
+            //console.log(cita_rate)
+            //console.log(Cita0,Cita1)
+
+            draw_result(cita_rate,Cita0,Cita1,nums)
+        }
+
+
+        //生成结果
+        function draw_result(cita_rate,Cita0,Cita1,nums){   
+            //数据格式处理，应用于图表  
+            var cita_val=[];
+            var expect_val=[];
+            var real_val=[];
+            for(var i=0;i<nums;i++)
+            {
+                cita_val.push([i+1,cita_rate[i]]);
+            } 
+            for(var i=0;i<realdata.length;i++)
+            {
+                expect_val.push([realdata[i][0],(Cita0+Cita1*realdata[i][0])]);
+                real_val.push([realdata[i][0],realdata[i][1]]);
+            }
+
+            //动态更新图表和结果数据
+            myChart1.setOption({
+                title:{
+                    text:"JΘ变化曲线/"+`${nums}`+"次"
+                },
+                series:[
+                        {  
+                            data: cita_val, 
+                        }
+                    ]
+            })
+
+            myChart2.setOption({
+                title:{
+                    text:"实际值与预测值变化图像/"+`${nums}`+"次"
+                },
+                series:[
+                    {
+                        data:expect_val,
+                    },
+                    {
+                        data:real_val
+                    }
+                ]
+            })
+
+            var resA=Cita0+Cita1*3.5;
+            var resB=Cita0+Cita1*7;
+
+            var h2s=document.querySelectorAll("#result h2")
+            h2s[0].innerHTML=`学习结果<span>(${nums}次)</span> <br> Θ0:${Cita0.toFixed(2)}<br>Θ1:${Cita1.toFixed(2)}`;
+            h2s[1].innerHTML=`城市预估值<span>(${nums}次)</span><br> A市:${resA.toFixed(2)}<br>B市:${resB.toFixed(2)}`;
+        }   
+
+
+
+        //动态数据类型检查
+        var input_flag=1,alpha_flag=1,file_flag=0;
+        var input_number=document.getElementById("input")
+        var input_alpha=document.getElementById("alpha")
+        input_number.oninput=function(e){
+            var val=e.target.value.trim();
+            if(/[^0-9]/.test(val)||val==""||parseInt(val)==0) 
+                e.target.style.border="3px solid red"
+            else 
+            {
+                e.target.style.border="3px solid green";
+                input_flag=0;
+                return
+            }   
+            input_flag=1;
+        }
+        input_alpha.oninput=function(e){
+            var val=e.target.value.trim();
+            if(/[^0-9.]/.test(val)||val==""||val.split(".").length>2||parseFloat(val)>0.01||parseFloat(val)==0)
+            {
+                e.target.style.border="3px solid red"
+            }
+            else 
+            {
+                e.target.style.border="3px solid green";
+                alpha_flag=0;
+                return
+            }
+            alpha_flag=1;
+        }
+
+        //刷新页面清空数据
+        window.onload=function(){
+            input_number.value="";
+            input_alpha.value="";
+        }
+    
+    </script>
+    
+    
+    
+</body>
+</html>

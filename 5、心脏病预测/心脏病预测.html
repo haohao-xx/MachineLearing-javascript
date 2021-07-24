@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>心脏病预测</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"> </script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-vis"></script>
+    <script src="../echarts.js"></script>
+    <style>
+        .picture{
+            width: 1000px;
+            height: 600px;
+            position: absolute;
+            left: 460px;
+            top: 20px;
+        }
+        p{
+            width: 400px;
+            background-color: rgb(52, 224, 196);
+            border-radius: 5px;
+        }
+        button{
+            width: 100px;
+            height: 30px;
+            background-color: blanchedalmond;
+            border: none;
+            font-size: 16px;
+            border-radius: 10px;
+            cursor: pointer;
+            margin-right: 30px;
+        }
+        button:hover{
+            transform: scale(1.1,1.1);
+        }
+        .result{
+            margin-top: 20px;
+            width: 300px;
+            height: 200px;
+            background-color: blanchedalmond;
+        }
+        .result p{
+            display: inline-block;
+            width: 100%;
+            height: 60px;
+
+        }
+    </style>
+</head>
+
+<body>
+    <p>输入归一化数据:  <input type="file" onchange="upload_process(this)"></p>
+    <p>输入原始数据:  <input type="file" onchange="upload_raw(this)"></p>
+
+    <button onclick="neural()">逻辑回归</button>
+    <button onclick="knn()(testdata.map(item=>{return item.slice(0,13)}))">KNN</button>
+
+    <div class="result">
+        <p>逻辑回归准确率:<span></span></p>
+        <p>KNN准确率:<span></span></p>
+    </div>
+
+    <div class="picture"></div>
+    <script>
+        var realdata = []; //训练集
+        var testdata = [];//测试集
+
+        var res_test=[];//测试集结果
+        var res_neural = [];//逻辑回归结果
+        var res_knn = [];//KNN结果
+
+        var flag1=false
+        var flag2=false
+
+        var precise=document.getElementsByTagName("span");
+        //echarts相关配置
+        var myChart1 = echarts.init(document.getElementsByClassName("picture")[0], 'dark');
+        var schema = [
+            { name: 'date', index: 0, text: '年龄' },
+            { name: 'sex', index: 1, text: '性别' },
+            { name: 'cp', index: 2, text: '胸痛类型' },
+            { name: 'trestbps', index: 3, text: '静息血压' },
+            { name: 'chol', index: 4, text: ' 血浆类固醇含量(mg/dl)' },
+            //{ name: 'fbs', index: 5, text: '空腹血糖>120mg/dl' },
+            { name: 'restecg', index: 5, text: '静息心电图结果' },
+            { name: 'thalach', index: 6, text: '最高心率' },
+            //{ name: 'exang', index: 8, text: '运动型心绞痛' },
+            { name: 'oldpeak', index: 7, text: 'ST下降' },
+            { name: 'slope', index: 8, text: '最大运动心电图ST斜率' },
+            { name: 'ca', index: 9, text: '主血管数' },
+            { name: 'thal', index: 10, text: 'THAL' },
+            { name: 'num', index: 11, text: '患病情况' }
+        ];
+        var lineStyle = {
+            normal: {
+                width: 1,
+                opacity: 0.5
+            }
+        };
+        var option = {
+            color: [
+                '#c23531', '#91c7ae', '#dd8668'
+            ],
+            legend: {
+                top: 10,
+                data: ['测试集', '逻辑回归', 'KNN'],
+                itemGap: 20
+            },
+            parallelAxis: [
+                { dim: 0, name: schema[0].text, inverse: true, nameLocation: 'start' },
+                { dim: 1, name: schema[1].text },
+                { dim: 2, name: schema[2].text },
+                { dim: 3, name: schema[3].text },
+                { dim: 4, name: schema[4].text },
+                //{ dim: 5, name: schema[5].text },
+                { dim: 5, name: schema[5].text },
+                { dim: 6, name: schema[6].text },
+                //{ dim: 8, name: schema[8].text },
+                { dim: 7, name: schema[7].text },
+                { dim: 8, name: schema[8].text },
+                { dim: 9, name: schema[9].text },
+                { dim: 10, name: schema[10].text },
+                {
+                    dim: 11, name: schema[11].text,
+                    type: 'category', data: ['患病', '不患病']
+                }
+            ],
+            parallel: {
+                left: '5%',
+                right: '13%',
+                bottom: '10%',
+                top: '20%',
+            },
+            series: [
+                {
+                    name: '测试集',
+                    type: 'parallel',
+                    lineStyle: lineStyle,
+                    data: []
+                },
+                {
+                    name: '逻辑回归',
+                    type: 'parallel',
+                    lineStyle: lineStyle,
+                    data: []
+                },
+                {
+                    name: 'KNN',
+                    type: 'parallel',
+                    lineStyle: lineStyle,
+                    data: []
+                }
+            ]
+        };
+        myChart1.setOption(option)
+
+        //加载原始数据
+        function upload_raw(input){
+            var file = input.files[0];
+            var reader = new FileReader();
+            reader.onload = function () {
+                var str = JSON.stringify(this.result)
+                str = JSON.parse(str.replace(/\\r\\n/g, ' ')).trim()
+                var rawdata = str.split(" ")
+                rawdata.forEach((item, index) => {
+                    if (index >= 200)
+                    {
+                        res_test.push(item.split(",").filter((item,index) => {
+                            if(index!==5&&index!==8)
+                            {
+                                return item
+                            }
+                                
+                        }))
+                    }   
+                })
+                res_test.forEach(item=>{item[11]=item[11]==1?'不患病':'患病'})
+                myChart1.setOption({
+                    series:[
+                        {data:res_test}
+                    ]
+                })
+                flag1=true
+            }
+            reader.readAsText(file)
+        }
+
+        //加载归一化数据
+        function upload_process(input) {
+            var file = input.files[0];
+            var reader = new FileReader();
+            reader.onload = function () {
+                var str = JSON.stringify(this.result)
+                str = JSON.parse(str.replace(/\\r\\n/g, ' ')).trim()
+                var rawdata = str.split(" ")
+                rawdata.forEach((item, index) => {
+                    if (index < 200)
+                        realdata.push(item.split(",").map(item => { return Number(item) }))
+                    else
+                        testdata.push(item.split(",").map(item => { return Number(item) }))
+                })
+                flag2=true
+            }
+            reader.readAsText(file)
+        }
+
+        //逻辑回归函数
+        async function neural() {
+            if(!flag1||!flag2)
+            {
+                alert("选择数据")
+                return;
+            }
+            const model = tf.sequential(); // sequential 连续的
+            // 定义模型结构：带有激活函数的单个神经元
+            model.add(tf.layers.dense({
+                units: 5, // 5个神经元
+                inputShape: [13],
+                activation: 'sigmoid'  // 激活函数，sigmoid作用：把输出值压缩到0-1之间
+            }));
+            model.add(tf.layers.dense({
+                units: 4,
+                activation: 'sigmoid'
+            }));
+            model.add(tf.layers.dense({
+                units: 2,
+                activation: 'sigmoid'
+            }));
+            // 设置损失函数和优化器
+            model.compile({ loss: "meanSquaredError", optimizer: tf.train.adam(0.1) });
+            //定义数据和标签
+            const inputs = tf.tensor(realdata.map(p => { return p.slice(0, 13) }));
+            const labels = tf.tensor(realdata.map(p => [p[13] ? 1 : 0, p[13] ? 0 : 1]));
+            //  训练模型并可视化训练过程
+            await model.fit(inputs, labels, {
+                batchSize: 50,
+                epochs: 100,  //每个数据的使用次数为100次
+                callbacks: tfvis.show.fitCallbacks(
+                    { name: '训练效果' },
+                    ['loss']
+                )
+            });
+            //进行预测
+            const pred = model.predict(tf.tensor(testdata.map(item => { return item.slice(0, 13) })));
+            let res=Array.from(pred.dataSync()) 
+            console.log(res instanceof Array)
+            while(res.length)
+            {
+                res_neural.push([res.shift(),res.shift()])
+            }
+            let num=0
+            res_neural=res_neural.map((item,index)=>{
+                let arr=res_test[index].slice()
+                arr[11]=item[0]>=item[1]?'患病':'不患病'
+                if(arr[11]!==res_test[index][11]) num++
+                return arr
+            })
+            console.log(res_neural)
+            myChart1.setOption({
+                    series:[
+                        {},
+                        {data:res_neural},
+                        {}
+                    ]
+                })
+                precise[0].innerHTML=`${((70-num)/70).toFixed(3)}`
+
+        }
+
+
+        //KNN函数
+        function knn() {
+            if(!flag1||!flag2)
+            {
+                alert("选择数据")
+                return;
+            }
+            const train_x = tf.tensor2d(realdata.map(p => { return p.slice(0, 13) }));
+            return function (x) {
+                x.map(function (point) {
+                    const input_tensor = tf.tensor1d(point);
+                    const distance = tf.sum(tf.abs(tf.sub(input_tensor, train_x)), 1);
+                    const index = tf.argMin(distance, 0);
+                    res_knn.push(realdata.map(p => p[13])[index.dataSync()[0]]);
+                });
+                let num=0
+                res_knn=res_knn.map((item,index)=>{
+                    let arr=res_test[index].slice()
+                    arr[11]=item==0?'不患病':'患病'
+                    if(arr[11]!==res_test[index][11]) num++
+                    return arr
+                })
+                myChart1.setOption({
+                    series:[
+                        {},
+                        {},
+                        {data:res_knn}
+                    ]
+                })
+                precise[1].innerHTML=`${((70-num)/70).toFixed(3)}`
+            
+            };
+        }
+    </script>
+</body>
+
+</html>

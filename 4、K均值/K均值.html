@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>K均值</title>
+    <script src="../echarts.js"></script>
+    <style>
+        .picture {
+            width: 700px;
+            height: 500px;
+        }
+
+        .wrap {
+            margin-top: 20px;
+            margin-left: 20px;
+            display: inline-block;
+        }
+        input{
+            display: block;
+        }
+    </style>
+</head>
+
+<body>
+    <input type="file" onchange="upload(this)">
+    <div class="wrap">
+        <button onclick="start()">计算</button>
+        <div class="picture"></div>
+    </div>
+    <div class="wrap">
+        <button onclick="rand()">计算</button>
+        <div class="picture"></div>
+    </div>
+
+
+
+
+    <script>
+        var realdata = [];//初始化数据
+        var center = [[[3, 3]], [[6, 2]], [[8, 5]]];//每次计算数据的中心点
+        var category = [[], [], []];//数据的分类
+        var flag = false;//判断是否有数据
+
+        var myChart1 = echarts.init(document.getElementsByClassName("picture")[0], 'dark');
+        var myChart2 = echarts.init(document.getElementsByClassName("picture")[1], 'dark');
+        myChart1.setOption({
+            title: {
+                text: "固定中心迭代10次"
+            },
+            xAxis: {
+                scale: true,
+            },
+            yAxis: {
+                scale: true,
+            },
+            series: [
+                {
+                    type: 'scatter',
+                    data: [],
+                },
+                {
+                    type: 'scatter',
+                    data: [],
+                },
+                {
+                    type: 'scatter',
+                    data: [],
+                },
+                {
+                    type: 'line',
+                    data: [],
+                },
+                {
+                    type: 'line',
+                    data: [],
+                },
+                {
+                    type: 'line',
+                    data: [],
+                }
+            ]
+        })
+        myChart2.setOption({
+            title: {
+                text: "随机生成(反复点击查看)"
+            },
+            xAxis: {
+                scale: true,
+            },
+            yAxis: {
+                scale: true,
+            },
+            series: [
+                {
+                    type: 'scatter',
+                    data: [],
+                },
+                {
+                    type: 'scatter',
+                    data: [],
+                },
+                {
+                    type: 'scatter',
+                    data: [],
+                },
+                {
+                    type: 'line',
+                    data: [],
+                },
+                {
+                    type: 'line',
+                    data: [],
+                },
+                {
+                    type: 'line',
+                    data: [],
+                }
+            ]
+        })
+        function upload(input) {
+            realdata.length = 0
+            var file = input.files[0];
+            filename = file.name.split(".")[0];
+            //console.log(filename)
+            var reader = new FileReader();
+            reader.onload = function () {
+                var str = JSON.stringify(this.result)
+                str = JSON.parse(str.replace(/\\n/g, " ")).trim()
+                var rawdata = str.split(" ")
+                for (var i = 0; i < rawdata.length; i++)
+                    realdata.push(rawdata[i].split(","))
+                realdata.forEach((item, index) => {
+                    item[0] = Number(item[0])
+                    item[1] = Number(item[1])
+                })
+                //console.log(realdata)
+                flag = true;
+                myChart1.setOption({
+                    series: [{
+                        data: realdata
+                    }]
+                })
+                myChart2.setOption({
+                    series: [{
+                        data: realdata
+                    }]
+                })
+            }
+            reader.readAsText(file);
+        }
+
+
+        function start() {
+            center = [[[3, 3]], [[6, 2]], [[8, 5]]];
+            if (!flag) {
+                alert('请选择数据');
+                return;
+            }
+            while (1) {
+                classify();
+                updateCenter();
+                if (judge(center))
+                    break;
+            }
+            console.log(center)
+            myChart1.setOption({
+                series: [
+                    {
+                        data: category[0],
+                        itemStyle: {
+                            color: 'green'
+                        }
+                    },
+                    {
+                        data: category[1],
+                        itemStyle: {
+                            color: 'blue'
+                        }
+                    },
+                    {
+                        data: category[2],
+                        itemStyle: {
+                            color: 'yellow'
+                        }
+                    },
+                    {
+                        data: center[0],
+                        itemStyle: {
+                            color: 'red'
+                        },
+                        symbolSize: 15
+                    },
+                    {
+                        data: center[1],
+                        itemStyle: {
+                            color: 'red'
+                        },
+                        symbolSize: 15
+                    },
+                    {
+                        data: center[2],
+                        itemStyle: {
+                            color: 'red'
+                        },
+                        symbolSize: 15
+                    },
+                ]
+            })
+
+        }
+        function judge(center) {
+            var num = 0;
+            center.forEach(item => {
+                if (item[item.length - 1][0] == item[item.length - 2][0])
+                    num++;
+            })
+            return num == 3 ? true : false;
+        }
+
+        function classify() {
+            category.forEach(element => {
+                element.length = 0;
+            });
+            realdata.forEach(item => {
+                var res = cal(item, center[0].length - 1);
+                category[res].push(item);
+            })
+        }
+
+        function cal(item, length) {
+            var distance = new Array(3);
+            center.forEach((mid, index) => {
+                distance[index] = (mid[length][0] - item[0]) ** 2 + (mid[length][1] - item[1]) ** 2
+            })
+            return distance.indexOf(Math.min(...distance));
+        }
+
+        function updateCenter() {
+            category.forEach((item, index) => {
+                var res = item.reduce((pre, next) => {
+                    return [pre[0] + next[0], pre[1] + next[1]]
+                })
+                center[index].push([res[0] / item.length, res[1] / item.length])
+            })
+            //console.log(center)
+        }
+
+        function rand() {
+            center.forEach(item => {
+                item.length = 0;
+                item.push([Math.random() * 8, Math.random() * 8])
+            })
+            if (!flag) {
+                alert('请选择数据');
+                return;
+            }
+            while (1) {
+                classify();
+                updateCenter();
+                if (judge(center))
+                    break;
+            }
+            console.log(center)
+            myChart2.setOption({
+                series: [
+                    {
+                        data: category[0],
+                        itemStyle: {
+                            color: 'green'
+                        }
+                    },
+                    {
+                        data: category[1],
+                        itemStyle: {
+                            color: 'blue'
+                        }
+                    },
+                    {
+                        data: category[2],
+                        itemStyle: {
+                            color: 'yellow'
+                        }
+                    },
+                    {
+                        data: center[0],
+                        itemStyle: {
+                            color: 'red'
+                        },
+                        symbolSize: 15
+                    },
+                    {
+                        data: center[1],
+                        itemStyle: {
+                            color: 'red'
+                        },
+                        symbolSize: 15
+                    },
+                    {
+                        data: center[2],
+                        itemStyle: {
+                            color: 'red'
+                        },
+                        symbolSize: 15
+                    },
+                ]
+            })
+        }
+    </script>
+</body>
+
+</html>
